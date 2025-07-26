@@ -1,0 +1,15 @@
+# Re-import necessary modules after environment reset
+import gzip
+import shutil
+from pathlib import Path
+
+# Unzip the first file again
+sample = "12"
+input_path = Path(f"../GSE208253/S{sample}/raw_data/GSM6339642_s{sample}_tissue_positions_list.csv.gz")
+output_path = input_path.with_suffix('')
+
+with gzip.open(input_path, 'rb') as f_in:
+    with open(output_path, 'wb') as f_out:
+        shutil.copyfileobj(f_in, f_out)
+
+print(output_path.name)
