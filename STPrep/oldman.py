@@ -12,20 +12,28 @@ from WaveletCoeffProcessing import readWaveletCoeffs, plotWavelets, resampleCoef
 from ImageSegmentationMasks import createPolygons, drawMask, concatAnnotations
 # %%
 # reading files
+# I have data structured as GSE208253 / 
+#     - sample (one for each)
+#         - info (expression + coordinate matrices, annotations)
+#         - process (wavelet coefficients)
+#         - raw_data (scalefactor, high-res image, other raw data processed in R/Seurat)
+#     - general (annotation color key, cropped images and masks)
+
 sample = "S1"
 geneTemp = "A2M"
-expression = pd.read_csv(f"../GSE208253/{sample}/info/expression_filtered.csv")
-coordinates = pd.read_csv(f"../GSE208253/{sample}/info/coordinates.csv", index_col=0)
-imagePath = f"../GSE208253/{sample}/raw_data/spatial/tissue_hires_image.png"
+dataPath = f"../../Computational Biology Group Project/GSE208253/" #replace with your data path
+expression = pd.read_csv(f"{dataPath}/{sample}/info/expression_filtered.csv")
+coordinates = pd.read_csv(f"{dataPath}/{sample}/info/coordinates.csv", index_col=0)
+imagePath = f"{dataPath}/{sample}/raw_data/spatial/tissue_hires_image.png"
 image = Image.open(imagePath)
-annotations = concatAnnotations(pd.read_csv(f"../GSE208253/{sample}/info/pathologist_annotations.csv", index_col=0), coordinates)
+annotations = concatAnnotations(pd.read_csv(f"{dataPath}/{sample}/info/pathologist_annotations.csv", index_col=0), coordinates)
 annotations = annotations.rename(columns=lambda x: x.replace('.', '_'))
-colorFile = "../GSE208253/general/annotation_colors.json"
+colorFile = f"{dataPath}/general/annotation_colors.json"
 #path = f"GSE208253/export/{sample}"
 bounds = getBounds(coordinates)
 
 
-scalePath = f"../GSE208253/{sample}/raw_data/spatial/scalefactors_json.json"
+scalePath = f"{dataPath}/{sample}/raw_data/spatial/scalefactors_json.json"
 with open(scalePath, 'r') as f:
     scales = json.load(f) 
 scaleF = scales["tissue_hires_scalef"]
@@ -39,7 +47,7 @@ overlayST(image, colorMask)
 # %%
 # Cropping Image
 print("Bounds: ", bounds)
-imgCropped = cropImage(image, coordinates, scaleF, False)
+imgCropped = cropImage(image, coordinates, scaleF)
 #maskCropped = cropImage(colorMask, coordinates, scaleF, False)
 #imgCropped.save(f"../GSE208253/general/images/S{sample}_cropped.png")
 display(imgCropped)
@@ -52,27 +60,22 @@ selectedRow = expression.loc[expression['Unnamed: 0'] == selectedGene]
 testRow = pd.DataFrame(columns=expression.columns) #visualize all barcodes for testing
 testRow.loc[0] = 3
 print(testRow)
-r = resampleEfficient(testRow, coordinates, 128, bounds)
-plotResampledMatrix(r, "A2M", D=128)
+r = resampleEfficient(testRow, coordinates, 32, bounds)
+plotResampledMatrix(r, "A2M", D=32)
 #np.array_equal(r1, r2)
 
 #r1.equals(r2)
 
 #%%
-u = upsampleToImage(r, coordinates, 128, scaleF, 1)
+u = upsampleToImage(r, coordinates, 128, scaleF, wv=4)
 print(u.shape)
 plotResampledMatrix(u, "Upsampled test")
 # %%
 # Wavelet Coefficients
-coeffs = readWaveletCoeffs(f"../GSE208253/S1/process/S1_wv22L2/A2M_resampled_128/")
+coeffs = readWaveletCoeffs(f"../../Computational Biology Group Project/GSE208253/S1/process/S1_wv22L2/A2M_resampled_128/")
 resampledCoeffs = resampleCoeffs(coeffs, coordinates, 128, scaleF)
 print("Original Coefficients:")
-for key, value in coeffs.items():
-    print(f"{key}: {value.shape}")
-
-#print("Resampled Coefficients:")
-for key, value in resampledCoeffs.items():
-    print(f"{key}: {value.shape}")
+plotWavelets(coeffs, "A2M")
 plotWavelets(resampledCoeffs, "A2M")
 #drawMatrix(u).show()
 #%%
@@ -85,7 +88,7 @@ plotResampledMatrix(test, "Upsampled A2M")
 print(f"Cropped Image Size: {imgCropped.size}")
 imgCoeff = drawMatrix(resampledCoeffs['L2_B00'])
 print(f"Upsampled Coefficient Shape: {resampledCoeffs['L2_B01'].shape}")
-overlayST(imgCropped, imgCoeff)
+overlayST(imgCropped, u)
 #%%
 print(resampledCoeffs['L2_B00'][62, 504])
 # %%
@@ -93,3 +96,6 @@ m = mapBarcodes(coordinates, 1545, 1475)
 m.to_csv(f"../GSE208253/{sample}/info/coordinates_mapped_test.csv")
 
 # %%
+print(f"Cropped Image Size: {imgCropped.size}")
+print(f"upsampled shape: {u.shape}")
+overlayST(imgCropped, drawMatrix(u))

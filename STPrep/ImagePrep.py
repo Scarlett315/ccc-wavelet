@@ -33,7 +33,7 @@ def normalizeChannels(red, green, blue):
     return red, green, blue
 
 #%%
-def cropImage(img, S, scaleFactor, flip=False, padding=0):
+def cropImage(img, S, scaleFactor):
     S = S.copy()
     def swapAxes(spatial):
         spatial['x'], spatial['y'] = spatial['y'], spatial['x']
@@ -48,17 +48,10 @@ def cropImage(img, S, scaleFactor, flip=False, padding=0):
     S['y'] = S['y'].apply(toPixels)
     xMin, xMax, yMin, yMax = getBounds(S)
 
-    #print(xMin, xMax, yMin, yMax)
-    shape = [xMin - padding, yMin - padding, xMax + padding, yMax + padding]
-    print(getBounds(S))
+    shape = [xMin, yMin, xMax, yMax]
     cropped = img
- 
-    if flip:
-        cropped = img.transpose(Image.FLIP_LEFT_RIGHT)
-        cropped = cropped.crop(shape) 
-        cropped = cropped.transpose(Image.FLIP_LEFT_RIGHT)
-    else:
-        cropped = cropped.crop(shape)
+
+    cropped = cropped.crop(shape)
     
     return cropped
 #%%
@@ -69,16 +62,3 @@ def overlayST(img, STImg, origin = (0,0)):
     STImg.putalpha(150)
     img.paste(STImg, origin, STImg)
     return img
-# %%
-# example
-#r, g, b = imgAsMat("GSE208253/export/tissue_hires_image_cropped.png")
-
-#nR, nG, nB = normalizeChannels(r, g, b)
-#Image.fromarray(nR).save("GSE208253/export/image/normalized_red.png")
-#Image.fromarray(nG).save("GSE208253/export/image/normalized_green.png")
-#Image.fromarray(nB).save("GSE208253/export/image/normalized_blue.png")
-
-#matToImg(nR, nG, nB).save("GSE208253/export/image/normalized_all.png")
-#matToImg(nR, nG, nB).show()
-#img = showChannels(nR, nG, nB)
-#img.show()

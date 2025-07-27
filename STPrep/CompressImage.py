@@ -1,4 +1,7 @@
 #%%
+# they didn't provide tissue_lowres_image so i just had to make them 
+# but it doeesn't actually correspond with the scalefactor so it's kinda useless
+# it's literally just b/c Seurat doesn't accept the folder if it doesn't have the img for some reason
 from PIL import Image
 import os
 #%%

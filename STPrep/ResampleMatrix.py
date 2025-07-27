@@ -10,15 +10,23 @@ from PIL import Image, ImageDraw
 def getBounds(S):
     '''
     Gets the "rectangle" that can cover all locations
-    S: the matrix mapping barcodes to locations with columns in the form [header, "x", "y", "cell"]
+    Args:
+        S: the matrix mapping barcodes to locations with columns in the form [header, "x", "y", "cell"]
     '''
+    #add one to xMax and yMax to include the last spot/pixel
     xMin = np.min(S["x"])
-    xMax = np.max(S["x"]) + 1
+    xMax = np.max(S["x"]) + 1 
     yMin = np.min(S["y"])
     yMax = np.max(S["y"]) + 1
     return xMin, xMax, yMin, yMax
 # %% 
 def partitionMatrix(D, bounds):
+    '''
+    Partitions matrix into a DxD grid
+    Args:
+        D: size of downsampled matrix
+        bounds: returned by getBounds(S)
+    '''
     xMin, xMax, yMin, yMax = bounds[0], bounds[1], bounds[2], bounds[3]
     xPartLength = (xMax - xMin) / D
     yPartLength = (yMax - yMin) / D
@@ -63,44 +71,32 @@ def resampleMatrix(gene, S, D, bounds):
                 filled += 1
     print(f"Filled {filled} out of {D*D} cells ({(filled / (D*D)) * 100:.2f}%)")
 
-    # Transform the final matrix to match image orientation
-    # Rotate 90° counterclockwise and flip over x-axis
-    #transformed = np.flipud(resampled.T)
-    #transformed = Image.fromarray(resampled)
-    #transformed = transformed.transpose(Image.FLIP_LEFT_RIGHT)
-    #transformed = transformed.rotate(90)
-    #transformed = np.asarray(transformed)
-
     print(resampled.shape)
     return pd.DataFrame(resampled)
 #%%
 def resampleEfficient(gene, S, D, bounds):
-    xMin, xMax, yMin, yMax = bounds[0], bounds[1], bounds[2] , bounds[3]
+    '''
+    Resamples the matrix to create an evenly-spaced representation
+    in matrix form for the wavelet transform.
+    Args:
+        gene (pd.DataFrame): gene expression matrix
+        S (pd.DataFrame): Spatial coordinates matrix
+        D (int): Downsampled matrix dimension
+        bounds (list): returned by getBounds(S)
+    '''
     sums = np.zeros(shape=(D, D))
     nums = np.zeros(shape=(D, D))
     for row in S.itertuples():
         x = row.x
         y = row.y
         expression = gene[row.cell].iloc[0]
-        # calculate the downsampled coordinates of x and y
-        #res_x = int(D * (x - xMin) / (xMax - xMin))
-        #res_y = int(D * (y - yMin) / (yMax - yMin))
         res_x, res_y = calcDownsampledCoords(x, y, D, bounds)
-        
 
         sums[res_y, res_x] += expression
         nums[res_y, res_x] += 1
 
     nums[nums == 0] = 1
     resampled = sums / nums
-
-    # Transform the final matrix to match image orientation
-    # Rotate 90° counterclockwise and flip over x-axis
-    #transformed = np.flipud(resampled.T)
-    #transformed = Image.fromarray(resampled)
-    #transformed = transformed.transpose(Image.FLIP_LEFT_RIGHT)
-    #transformed = transformed.rotate(90)
-    #transformed = np.asarray(transformed)
 
     return pd.DataFrame(resampled)
 
@@ -117,6 +113,10 @@ def resampleAllGenes(Y, S, D, bounds, pathExport):
     
 # %%
 def plotResampledMatrix(geneMatrix, geneName, ax=None, title=None, vmin=None, vmax=None, s=50, show_colorbar=True, D = None):
+    '''
+    Plots resampled gene matrix
+    Used for visualizing downsampled, upsampled, and wavelet coeff matrices
+    '''
     nonzero_y, nonzero_x = np.nonzero(geneMatrix)
     values = np.asarray(geneMatrix)[nonzero_y, nonzero_x]
     if ax is None:
@@ -160,20 +160,22 @@ def drawMatrix(geneMatrix, radius=3):
     #img = img.rotate(180)
     return img
 #%%
-def upsampleToImage(geneMatrix, S, D, scaleFactor, wv=1):
+def upsampleToImage(geneMatrix, S, D, scaleFactor, wv=1, exportMapping=False):
     '''
     Upsamples gene matrix to the scale of the image and removes barcodes
     that aren't there in the original
     
     Args:
-        geneMatrix: The resampled gene matrix (DxD)
-        S: Spatial coordinates dataframe
-        D: Downsampled matrix dimension
-        scaleFactor: Scale factor for upsampling
-        bounds: returned by getBounds(S)
+        geneMatrix (pd.DataFrame or np.array): The resampled gene matrix (DxD)
+        S (pd.DataFrame): Spatial coordinates dataframe
+        D (int): Downsampled matrix dimension
+        scaleFactor (float): Scale factor for upsampling
+        wv (int): wavelet transform level, hardcoded in WaveletCoeffProcessing
+        exportMapping (bool): boolean to export the mapping of barcodes to pixels
     '''
+    nzCount_orig = np.count_nonzero(geneMatrix)
     geneMatrix = np.asarray(geneMatrix)
-    print("Nonzero values before mapping: ", np.count_nonzero(geneMatrix))
+    #print("Nonzero values before mapping: ", np.count_nonzero(geneMatrix))
     def swapAxes(spatial):
         spatial['x'], spatial['y'] = spatial['y'], spatial['x']
         return spatial
@@ -188,7 +190,7 @@ def upsampleToImage(geneMatrix, S, D, scaleFactor, wv=1):
     S["y"] = S["y"].apply(toPixels)
 
     bounds = getBounds(S)
-    print(f"Bounds: {bounds}")
+    #print(f"Bounds: {bounds}")
 
     _, xPartLength, yPartLength = partitionMatrix(D, bounds)    
     imgLength = int(xPartLength * D) # length of orig in pixels
@@ -197,31 +199,48 @@ def upsampleToImage(geneMatrix, S, D, scaleFactor, wv=1):
     origLength = imgHeight
     origHeight = imgLength
 
-    print(f"length, height: {imgLength}, {imgHeight}")
-
     upsampled = np.zeros((imgHeight, imgLength))
 
 
     origBounds = getBounds(S_orig)
-    print("BOUNDS: ", origBounds)
+    #print("BOUNDS: ", origBounds)
+
+    if exportMapping:
+        mapping = pd.DataFrame(columns=["barcode", "x", "y"])
 
     for _, row in S_orig.iterrows():
-        print(f"Barcode x, y: {row['x']}, {row['y']}")
+        #print(f"Barcode x, y: {row['x']}, {row['y']}")
         x_downsampled, y_downsampled = calcDownsampledCoords(row["x"], row["y"], D, origBounds, wv=wv)
         x_img, y_img = calculateImgCoords(row["x"], row["y"], origBounds, origLength, origHeight)
-        print(f"x_img, y_img: {x_img}, {y_img}")
-        print(f"x_downsampled, y_downsampled: {x_downsampled}, {y_downsampled}")
-        print(f"geneMatrix value: {geneMatrix[y_downsampled, x_downsampled]}")
+        #print(f"x_img, y_img: {x_img}, {y_img}")
+        #print(f"x_downsampled, y_downsampled: {x_downsampled}, {y_downsampled}")
+        #print(f"geneMatrix value: {geneMatrix[y_downsampled, x_downsampled]}")
         upsampled[y_img, x_img] = geneMatrix[y_downsampled, x_downsampled]
+        #if geneMatrix[y_downsampled, x_downsampled] <0.1 or geneMatrix[y_downsampled, x_downsampled] > -0.1:
+            #print(geneMatrix[y_downsampled, x_downsampled])
 
-        print(f"name: {row['cell']}; Barcode x, y: {row['x']}, {row['y']}; Upsampled x, y: {x_img}, {y_img}")
-    print(f"Nonzero values after mapping: {np.count_nonzero(upsampled)}")
+        if exportMapping:
+            mapRow = pd.DataFrame([{"barcode": row["cell"], "x": x_img, "y": y_img}])
+            mapping = pd.concat([mapping, mapRow], ignore_index=True)
 
-    #plotResampledMatrix(upsampled, "hi")
-    return upsampled
-    
+    nzCount_up = np.count_nonzero(upsampled)
+    print(f"--- Nonzero values before mapping: {nzCount_orig}, Nonzero values after mapping: {nzCount_up}")
+    if exportMapping:
+        mapping.set_index("barcode", inplace=True)
+        return upsampled, mapping
+    else:
+        return upsampled
 #%%
 def calculateImgCoords(x, y, bounds, imgLength, imgHeight):
+    '''
+    Calculates where the coordinates of a barcodespot would be in pixels
+    Args:
+        x (int): x coordinate of spot (barcode)
+        y (int): y coordinate of spot (barcode)
+        bounds (list): returned by getBounds(S)
+        imgLength (int): length of the image
+        imgHeight (int): height of the image
+    '''
     xMin, xMax, yMin, yMax = bounds[0], bounds[1], bounds[2], bounds[3]
     x_rel = (x - xMin) / (xMax - xMin)
     y_rel = (y - yMin) / (yMax - yMin)
@@ -236,13 +255,21 @@ def calculateImgCoords(x, y, bounds, imgLength, imgHeight):
 
 #%%
 def calcDownsampledCoords(x, y, D, bounds, wv=1):
+    '''
+    Calculates where the coordinates of a barcode spot would be in the downsampled (DxD) matrix
+    Args:
+        x (int): x coordinate of spot (barcode)
+        y (int): y coordinate of spot (barcode)
+        D (int): downsampled matrix dimension
+        bounds (list): returned by getBounds(S)
+        wv (int): wavelet transform level, hardcoded in WaveletCoeffProcessing
+    '''
     xMin, xMax, yMin, yMax = bounds[0], bounds[1], bounds[2], bounds[3]
      # calculate the downsampled coordinates of x and y
     res_x = int(D * (x - xMin) / (wv * (xMax - xMin)))
     res_y = int(D * (y - yMin) / (wv * (yMax - yMin)))
 
     # Transform: rotate 90° counterclockwise and flip over x-axis
-    # Combined transformation: (x, y) → (y, x)
     x_transformed = res_y
     y_transformed = res_x
     return x_transformed, y_transformed
