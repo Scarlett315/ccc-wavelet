@@ -200,8 +200,8 @@ def upsampleToImage(geneMatrix, S, D, scaleFactor, wv=1, exportMapping=False):
     origHeight = imgLength
 
     upsampled = np.zeros((imgHeight, imgLength))
-
-
+    #upsampled = np.full((imgHeight, imgLength), np.nan)
+    
     origBounds = getBounds(S_orig)
     #print("BOUNDS: ", origBounds)
 
@@ -221,7 +221,7 @@ def upsampleToImage(geneMatrix, S, D, scaleFactor, wv=1, exportMapping=False):
 
         if exportMapping:
             mapRow = pd.DataFrame([{"barcode": row["cell"], "x": x_img, "y": y_img}])
-            mapping = pd.concat([mapping, mapRow], ignore_index=True)
+            mapping = pd.concat([mapping, mapRow], ignore_index=False)
 
     nzCount_up = np.count_nonzero(upsampled)
     print(f"--- Nonzero values before mapping: {nzCount_orig}, Nonzero values after mapping: {nzCount_up}")

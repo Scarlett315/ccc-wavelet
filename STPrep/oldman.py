@@ -39,8 +39,9 @@ with open(scalePath, 'r') as f:
 scaleF = scales["tissue_hires_scalef"]
 
 #%%
-p = createPolygons(annotations, scaleF)
-colorMask = drawMask(p, image, colorFile)
+p = createPolygons(annotations, scaleF, label="cluster_annotations")
+print(p)
+colorMask = drawMask(p, image, colorFile, noLabel=True)
 #colorMask.save(f"../GSE208253/{sample}/info/annotationPlot.png")
 annotations.head()
 overlayST(image, colorMask)
@@ -70,25 +71,34 @@ plotResampledMatrix(r, "A2M", D=32)
 u = upsampleToImage(r, coordinates, 128, scaleF, wv=4)
 print(u.shape)
 plotResampledMatrix(u, "Upsampled test")
+img_as_arr = np.array(imgCropped)
+print(f"Upsampled Matrix Shape: {u.shape}")
+print(f"Cropped Image Size: {imgCropped.size}")
+print(f"Cropped Image As Array Shape: {img_as_arr.shape}")
 # %%
 # Wavelet Coefficients
-coeffs = readWaveletCoeffs(f"../../Computational Biology Group Project/GSE208253/S1/process/S1_wv22L2/A2M_resampled_128/")
+coeffs = readWaveletCoeffs(f"../GSE208253/S1/process/S1_wv22L2/A2M_resampled_128/")
 resampledCoeffs = resampleCoeffs(coeffs, coordinates, 128, scaleF)
-print("Original Coefficients:")
-plotWavelets(coeffs, "A2M")
 plotWavelets(resampledCoeffs, "A2M")
 #drawMatrix(u).show()
 #%%
-np.set_printoptions(threshold=np.inf)
-plotResampledMatrix(coeffs['L2_B00'], "Wavelet A2M")
-test = upsampleToImage(coeffs['L2_B00'], coordinates, 128, scaleF, 4)
-plotResampledMatrix(test, "Upsampled A2M")
+#plotResampledMatrix(coeffs['L2_B00'], "Wavelet A2M")
+up, map = upsampleToImage(coeffs['L2_B00'], coordinates, 128, scaleF, 4, exportMapping=True)
+#plotResampledMatrix(up, "Upsampled A2M")
+print(up.shape)
+for y, x in zip(np.nonzero(up)[0], np.nonzero(up)[1]):
+    print(f"x: {x}, y: {y}")
+    mask = map[(map["x"] == x) & (map["y"] == y)]
+    print(mask)
 
+print(up[196, 595])
+print(up.shape)
+
+#ap.to_csv(f"test.csv")
 #%%
 print(f"Cropped Image Size: {imgCropped.size}")
 imgCoeff = drawMatrix(resampledCoeffs['L2_B00'])
 print(f"Upsampled Coefficient Shape: {resampledCoeffs['L2_B01'].shape}")
-overlayST(imgCropped, u)
 #%%
 print(resampledCoeffs['L2_B00'][62, 504])
 # %%

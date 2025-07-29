@@ -17,8 +17,13 @@ def readColorFile(path):
     return labels, colors
 
 #%% creating polygons from files
-def createPolygons(a, scaleFactor):
-    labels = a["pathologist_anno_x"].unique()
+def createPolygons(a, scaleFactor, label=None):
+    if label is None:
+        labels = a["pathologist_anno_x"].unique()
+        col_name = "pathologist_anno_x"
+    else:
+        labels = a[label].unique()
+        col_name = label
     print(labels)
     polygons = {}
     for l in range(len(labels)):
@@ -26,11 +31,14 @@ def createPolygons(a, scaleFactor):
         polygons[labels[l]] = []
 
     for annotation in a.itertuples():
-        polygons[annotation.pathologist_anno_x].append((annotation.x * scaleFactor, annotation.y * scaleFactor))
+        polygons[getattr(annotation, col_name)].append((annotation.x * scaleFactor, annotation.y * scaleFactor))
     return polygons
 #%%
-def drawMask(polygons, img, colorFile, radius=2):
+def drawMask(polygons, img, colorFile, radius=2, noLabel = False):
     labels, colors = readColorFile(colorFile)
+    if noLabel:
+        labels = {label: label for label in polygons.keys()}
+        print(labels)
 
     width, height = img.size
     imgSize = (int(width), int(height))
@@ -47,11 +55,15 @@ def drawMask(polygons, img, colorFile, radius=2):
     labelNum = 0
     pointsPlotted = 0
     for label, points in polygons.items():
-        print(f"Drawing label '{label}' with {len(points)} points, color {labels[label][1]}")
+        if noLabel:
+            color = list(colors)[labelNum]
+        else:
+            color = labels[label][1]
+        print(f"Drawing label '{label}' with {len(points)} points, color {color}")
         for x, y in points:
             bbox = (x - radius, y - radius, x + radius, y + radius)
-            draw_color.ellipse(bbox, fill=colors[labels[label][1]])
-            draw_label.ellipse(bbox, fill=labels[label][0])
+            draw_color.ellipse(bbox, fill=colors[color])
+            #draw_label.ellipse(bbox, fill=colors[color])
             pointsPlotted += 1
         labelNum += 1
     print(f"Plotted {pointsPlotted} points")
