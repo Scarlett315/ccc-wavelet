@@ -50,7 +50,7 @@ def resampleAllGenesMain(Y, S, D, bounds, pathExport):
         os.makedirs(pathExport, exist_ok=True)
         r.to_csv(f"{pathExport}/{name}_resampled_{str(D)}.csv")
 
-def upsampleAllCoeffsMain(pathToCoeffs, S, D, scaleFactor, exportPath):
+def upsampleAllCoeffsMain(pathToCoeffs, S, D, scaleFactor, exportPath, stackEachGene=False):
     num = 1
     for folder in os.listdir(pathToCoeffs):
         folder_path = os.path.join(pathToCoeffs, folder)
@@ -60,7 +60,10 @@ def upsampleAllCoeffsMain(pathToCoeffs, S, D, scaleFactor, exportPath):
         print(f"{num}: {geneName}")
         
         coeffs = readWaveletCoeffs(f"{pathToCoeffs}/{folder}")
-        resampled = resampleCoeffs(coeffs, S, D, scaleFactor)
+        if stackEachGene:
+            resampled = resampleCoeffs(coeffs, S, D, scaleFactor, stack=True)
+        else:   
+            resampled = resampleCoeffs(coeffs, S, D, scaleFactor)
         if num == 1:  #redoing upsampling for a random coefficient to get the mapping (checked to be equal across genes & coeffs)
             print(f"Reading from: {pathToCoeffs}")
             print(f"Saving to: {exportPath}")
@@ -71,8 +74,9 @@ def upsampleAllCoeffsMain(pathToCoeffs, S, D, scaleFactor, exportPath):
         num += 1
 
 #TODO: maybe experiment with the types of interpolation
-def upsampleWavletImgs(path, export):
+def upsampleWavletImgs(path, export, origDims, stacked=False):
     for folder in os.listdir(path):
+        origHeight, origLength = origDims
         if not os.path.isdir(f"{path}/{folder}"):
             continue
         if folder.split("_")[0] == "L1":
@@ -86,10 +90,33 @@ def upsampleWavletImgs(path, export):
                 
                 img_arr = np.load(f"{path}/{folder}/{file}")
                 wv_height, wv_length = img_arr.shape
-                img = zoom(img_arr, (1475/wv_height, 1545/wv_length), order=0)
+                img = zoom(img_arr, (origHeight/wv_height, origLength/wv_length), order=0)
                 Image.fromarray(img).show()
                 print("Upsampled Image Shape: ", img.shape)
                 np.save(f"{export}/{ch}/{folder}_{ch}.npy", img)
+
+            elif file == "subband.npy":
+                img_arr = np.load(f"{path}/{folder}/{file}")
+
+                print(img_arr.shape)
+                chs = []
+                for ch_arr in img_arr:
+                    wv_height, wv_length = ch_arr.shape
+                    img = zoom(ch_arr, (origHeight/wv_height, origLength/wv_length), order=0)
+                    print("Upsampled Image Shape: ", img.shape)
+                    chs.append(img)
+
+                chs = np.dstack((chs[0], chs[1], chs[2]))               
+
+                print(chs.shape)
+                chs_uint_8 = (chs * 255).clip(0, 255).astype(np.uint8)
+                Image.fromarray(chs_uint_8).show()
+                os.makedirs(f"{export}/{folder}")
+                np.save(f"{export}/{folder}/subband.npy", chs)
+
+
+
+
             
     
 def testUpsample(dataPath, sample, pathExport):
@@ -115,7 +142,7 @@ def main():
     #resampleAllGenesMain(expression, coordinates, 128, bounds, f"{pathExport}/resampled")
     #upsampleAllCoeffsMain(f"{dataPath}/{sample}/process/S1_wv22L2/", coordinates, 128, scaleFactor, pathExport)
 
-    upsampleWavletImgs(f"{dataPath}/{sample}/process/Img_Coeffs", f"{dataPath}/{sample}/process/Upsampled_Img_Coeffs")
+    upsampleWavletImgs(f"{dataPath}/{sample}/process/img_coeffs", f"{dataPath}/{sample}/process/Upsampled_Img_Coeffs", (1475, 1545))
    
 
 if __name__ == "__main__":

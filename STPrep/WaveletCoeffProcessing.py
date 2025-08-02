@@ -92,7 +92,7 @@ def plotWavelets(coeffs, geneName):
 
 #%%
 # inflexible so might need to change later
-def resampleCoeffs(coeffs, S, D, scaleFactor):
+def resampleCoeffs(coeffs, S, D, scaleFactor, stack=False):
     upsampledCoeffs = {}
     L1 = ["L1_B00", "L1_B01", "L1_B10", "L1_B11"]
     L2 = ["L2_B00", "L2_B01", "L2_B10", "L2_B11"]
@@ -102,23 +102,37 @@ def resampleCoeffs(coeffs, S, D, scaleFactor):
         elif key in L2:
             upsampled = upsampleToImage(value, S, D, scaleFactor, wv=4)
         upsampledCoeffs[key] = upsampled
-    return upsampledCoeffs
-
+    if stack:
+        upsampledCoeffs = sorted(upsampledCoeffs.items(), key=lambda item: item[0])
+        upsampledCoeffs = dict(upsampledCoeffs)
+        labels = [key for key in upsampledCoeffs.keys()]
+        upsampledCoeffs = np.stack(upsampledCoeffs, axis=0)
+        return upsampledCoeffs, labels
+    else:
+        return upsampledCoeffs
 #%%
-def exportCoeffs(coeffs, path, geneName):
+def exportCoeffs(coeffs, path, geneName, stacked=False):
     '''
     Uploads the coefficients to the database
     Args: 
         coeffs: dictionary of coefficients
         path: path to the coefficients
     '''
-    folder = f'{path}/{geneName}_upsampled_coeffs'
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-    for key, value in coeffs.items():
-        df = pd.DataFrame(value)
-        df.to_csv(f'{folder}/{geneName}_{key}.csv', index=False)
+    if not stacked:
+        folder = f'{path}/{geneName}_upsampled_coeffs'
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        for key, value in coeffs.items():
+            df = pd.DataFrame(value)
+            df.to_csv(f'{folder}/{geneName}_{key}.csv', index=False)
+    # if they're stacked already just add to the folder
+    else:
+        df = pd.DataFrame(coeffs)
+        df.to_csv(f'{path}/{geneName}_upsampled_coeffs.csv', index=False)
+
+
 # %%
+# use the one in main
 def processAllCoeffs(path, S, D, scaleFactor, bounds):
     for folder in os.listdir(path):
         geneName = folder.split("_")[0]

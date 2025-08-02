@@ -7,6 +7,7 @@ from PIL import Image
 import cv2
 from ResampleMatrix import getBounds
 from PIL import ImageDraw
+import os
 # %%
 def imgAsMat(path):
     img = Image.open(path)
@@ -31,6 +32,35 @@ def normalizeChannels(red, green, blue):
     nGreen = cv2.normalize(green, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
     nBlue = cv2.normalize(blue, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
     return red, green, blue
+
+#%%
+#Z score normalization for RGB images per channel
+def normalizeImages(input_dir, output_dir):
+    for fname in os.listdir(input_dir):
+        if fname.lower().endswith('.png'):
+            path = os.path.join(input_dir, fname)
+            img = Image.open(path).convert('RGB')  # need to make sure it's RGB
+            img_np = np.array(img).astype(np.float32)  # shape: (H, W, 3)
+
+            z_norm = np.zeros_like(img_np)
+
+            for c in range(3):  # For each channel: R, G, B
+                channel = img_np[:, :, c]
+                mean = np.mean(channel)
+                std = np.std(channel)
+
+                if std == 0:
+                    print(f"Skipping {fname} channel {c}: std=0")
+                    continue
+
+                z_norm[:, :, c] = (channel - mean) / std
+
+            save_path = os.path.join(output_dir, os.path.splitext(fname)[0] + ".npy")
+            np.save(save_path, z_norm)
+
+            print(f"Normalized RGB and saved: {save_path}")
+
+    print("All RGB images Z-score normalized :)")
 
 #%%
 def cropImage(img, S, scaleFactor):

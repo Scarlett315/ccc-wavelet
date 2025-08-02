@@ -6,6 +6,9 @@ RProj.user/
 .RDataTmp
 STPrep/Unused/
 .vscode
+fake_dataset/
+.RData
+.RProj
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

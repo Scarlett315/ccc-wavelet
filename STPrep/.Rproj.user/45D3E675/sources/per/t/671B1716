@@ -1,6 +1,6 @@
 {
     "id": "671B1716",
-    "path": "~/Programming/Computational Biology Group Project/STPrep/STPrep.R",
+    "path": "~/Programming/ccc-wavelet/STPrep/STPrep.R",
     "project_path": "STPrep.R",
     "type": "r_source",
     "hash": "743622847",
@@ -14,7 +14,7 @@
         "source_window_id": "",
         "Source": "Source",
         "cursorPosition": "3,10",
-        "scrollLine": "16"
+        "scrollLine": "0"
     },
     "folds": "",
     "lastKnownWriteTime": 1752864656,
