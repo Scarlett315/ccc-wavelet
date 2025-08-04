@@ -109,3 +109,17 @@ m.to_csv(f"../GSE208253/{sample}/info/coordinates_mapped_test.csv")
 print(f"Cropped Image Size: {imgCropped.size}")
 print(f"upsampled shape: {u.shape}")
 overlayST(imgCropped, drawMatrix(u))
+
+#%%
+e = pd.read_csv("/Users/scarlett/Programming/ccc-wavelet/Data/human_breast_cancer/info/expression_filtered.csv", index_col=0)
+c = pd.read_csv("/Users/scarlett/Programming/ccc-wavelet/Data/human_breast_cancer/info/coordinates.csv", index_col=0)
+#a = resampleEfficient(e.loc["BGN"], c, 128, getBounds(c))
+a = pd.read_csv("/Users/scarlett/Programming/ccc-wavelet/Data/human_breast_cancer/process/resampled_128/BGN_resampled_128.csv", index_col=False)
+print(a.head())
+
+a = a.apply(pd.to_numeric, errors='coerce')
+a = a.to_numpy()
+print(a.shape)
+plotResampledMatrix(a, "hi", D=128)
+
+# %%

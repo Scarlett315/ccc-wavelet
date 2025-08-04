@@ -89,13 +89,13 @@ def resampleEfficient(gene, S, D, bounds):
     for row in S.itertuples():
         x = row.x
         y = row.y
-        expression = gene[row.cell].iloc[0]
+        expression = gene[row.cell]
         res_x, res_y = calcDownsampledCoords(x, y, D, bounds)
-
         sums[res_y, res_x] += expression
         nums[res_y, res_x] += 1
 
     nums[nums == 0] = 1
+    #print(sums)
     resampled = sums / nums
 
     return pd.DataFrame(resampled)
@@ -274,6 +274,7 @@ def calcDownsampledCoords(x, y, D, bounds, wv=1):
     y_transformed = res_x
     return x_transformed, y_transformed
 #%%
+# don't use this--upsampling will export
 def mapBarcodes(coordinates, imgLength, imgHeight):
     coords_new = pd.DataFrame(columns=["barcode", "x", "y"])
     coordinates = coordinates.copy()

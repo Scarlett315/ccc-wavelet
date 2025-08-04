@@ -5,14 +5,12 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from scipy.ndimage import zoom
 import json
-from ImagePrep import cropImage
+from ImagePrep import cropImage, overlayST
 from IPython.display import display
 from WaveletCoeffProcessing import readWaveletCoeffs, plotWavelets, resampleCoeffs, exportCoeffs
 from ImageSegmentationMasks import createPolygons, drawMask, concatAnnotations
 from ResampleMatrix import resampleEfficient, getBounds, upsampleToImage
 import os
-
-import sys
 
 #I have data structured as GSE208253 / 
 #     - sample (one for each)
@@ -21,34 +19,35 @@ import sys
 #         - raw_data (scalefactor, high-res image, other raw data processed in R/Seurat)
 #     - general (annotation color key, cropped images and masks)
 
-def readFiles(sample, dataPath):
-    expression = pd.read_csv(f"{dataPath}/{sample}/info/expression_filtered.csv")
-    coordinates = pd.read_csv(f"{dataPath}/{sample}/info/coordinates.csv", index_col=0)
-    imagePath = f"{dataPath}/{sample}/raw_data/spatial/tissue_hires_image.png"
+def readFiles(dataPath):
+    expression = pd.read_csv(f"{dataPath}/info/expression_filtered_less.csv", index_col=0)
+    coordinates = pd.read_csv(f"{dataPath}/info/coordinates.csv", index_col=0)
+    imagePath = f"{dataPath}/raw_data/spatial/tissue_hires_image.png"
     image = Image.open(imagePath)
-    annotations = concatAnnotations(pd.read_csv(f"{dataPath}/{sample}/info/pathologist_annotations.csv", index_col=0), coordinates)
-    annotations = annotations.rename(columns=lambda x: x.replace('.', '_'))
+    #annotations = concatAnnotations(pd.read_csv(f"{dataPath}/info/pathologist_annotations.csv", index_col=0), coordinates)
+    #annotations = annotations.rename(columns=lambda x: x.replace('.', '_'))
     colorFile = f"{dataPath}/general/annotation_colors.json"
     bounds = getBounds(coordinates)
 
-    scalePath = f"{dataPath}/{sample}/raw_data/spatial/scalefactors_json.json"
+    scalePath = f"{dataPath}/raw_data/spatial/scalefactors_json.json"
     with open(scalePath, 'r') as f:
         scales = json.load(f) 
     scaleF = scales["tissue_hires_scalef"]
 
-    return expression, coordinates, image, annotations, colorFile, scaleF
+    return expression, coordinates, image, colorFile, scaleF
 
 
 def resampleAllGenesMain(Y, S, D, bounds, pathExport):
     print("Rows in Y: ", len(Y))
-    for index, r in Y.iterrows():
-        name = Y["Unnamed: 0"][index]
-        print(f"{index}: {name}")
+    count = 0
+    os.makedirs(pathExport, exist_ok=True)
 
-        row = Y.loc[Y['Unnamed: 0'] == name]
+    for index, row in Y.iterrows():
+        name = index
+        print(f"{count}: {name}")
         r = resampleEfficient(row, S, D, bounds)
-        os.makedirs(pathExport, exist_ok=True)
-        r.to_csv(f"{pathExport}/{name}_resampled_{str(D)}.csv")
+        r.to_csv(f"{pathExport}/{name}_resampled_{str(D)}.csv", header=False, index=False)
+        count += 1
 
 def upsampleAllCoeffsMain(pathToCoeffs, S, D, scaleFactor, exportPath, stackEachGene=False):
     num = 1
@@ -113,11 +112,7 @@ def upsampleWavletImgs(path, export, origDims, stacked=False):
                 Image.fromarray(chs_uint_8).show()
                 os.makedirs(f"{export}/{folder}")
                 np.save(f"{export}/{folder}/subband.npy", chs)
-
-
-
-
-            
+     
     
 def testUpsample(dataPath, sample, pathExport):
     test_orig = np.load(f"{dataPath}/{sample}/process/S1_wv22L2/PPL_resampled_128/L1_B10.npy")
@@ -126,23 +121,26 @@ def testUpsample(dataPath, sample, pathExport):
     print(test_up.shape)
     print(np.count_nonzero(test_orig))
     print(test_orig.shape)
+
+def cropImageSave(img, coords, scaleF, exportPath):
+    cropped = cropImage(img, coords, scaleF)
+    cropped.save(f"{exportPath}/img.png")
         
 def main():
-    sample = "S1"
-    dataPath = f"GSE208253" #replace with your data path
+    dataPath = "Data/human_breast_cancer" #replace with your data path
 
-    expression, coordinates, image, annotations, colorFile, scaleFactor = readFiles(sample, dataPath)
+    expression, coordinates, image, colorFile, scaleFactor = readFiles(dataPath)
     bounds = getBounds(coordinates)
-    pathExport = f"/Volumes/Samsung USB/UpsampledCoeffs/S1_wv22L2"
+    pathExport = f"Data/human_breast_cancer/process"
 
-    print("resample: resample all genes from folder")
-
+    #print("resample: resample all genes from folder")
+    #print(expression.describe())
+    resampleAllGenesMain(expression, coordinates, 128, bounds, f"{pathExport}/resampled_128_less_filtered")
+    #cropImageSave(image, coordinates, scaleFactor, f"{dataPath}/info")
 
     # when you do indexing make sure you do [y, x] 
-    #resampleAllGenesMain(expression, coordinates, 128, bounds, f"{pathExport}/resampled")
     #upsampleAllCoeffsMain(f"{dataPath}/{sample}/process/S1_wv22L2/", coordinates, 128, scaleFactor, pathExport)
-
-    upsampleWavletImgs(f"{dataPath}/{sample}/process/img_coeffs", f"{dataPath}/{sample}/process/Upsampled_Img_Coeffs", (1475, 1545))
+    #upsampleWavletImgs(f"{dataPath}/process/img_coeffs", f"{dataPath}/process/Upsampled_Img_Coeffs", (1475, 1545))
    
 
 if __name__ == "__main__":
