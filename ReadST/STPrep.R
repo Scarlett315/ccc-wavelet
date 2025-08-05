@@ -27,7 +27,6 @@ preprocess <- function(seuratObj){
   seuratObj <- FindNeighbors(seuratObj, reduction = "pca", dims = 1:30)
   seuratObj <- FindClusters(seuratObj, verbose = FALSE)
   seuratObj <- RunUMAP(seuratObj, reduction = "pca", dims = 1:30)
-  print(SpatialFeaturePlot(seuratObj, features = c("SDF4")))
   return(seuratObj)
 }
 
@@ -43,7 +42,7 @@ preprocessNormalized <- function(seuratObj){
 
 getExpression <- function(seuratObj){
   #getting expression matrix and exporting to csv
-  expression_matrix <- GetAssayData(object = seuratObj, assay = "Spatial", layer = "data")
+  expression_matrix <- GetAssayData(object = seuratObj, assay = "Spatial", slot = "data")
   dense_expr <- as.matrix(expression_matrix)
   return(dense_expr)
 }
@@ -56,11 +55,11 @@ getSpatial <- function(seuratObj){
 }
 
 # get most expressed genes (for testing)
-getExpGenes <- function(seuratObj){
+getExpGenes <- function(seuratObj, min.pct=0.5){
   cluster_markers <- FindAllMarkers(seuratObj, 
                                     ident.use = "orig.ident", # or "orig.ident" for samples
                                     only.pos = TRUE, # Only find up-regulated genes
-                                    #min.pct = 0.5, # Minimum percentage of cells expressing the gene
+                                    min.pct = min.pct, # Minimum percentage of cells expressing the gene
                                     logfc.threshold = 1, # Minimum log fold-change in expression
 
   )

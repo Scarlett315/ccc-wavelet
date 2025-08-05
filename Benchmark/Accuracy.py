@@ -3,12 +3,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
-import seaborn as sns
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial import cKDTree
 import matplotlib.patches as mpatches
 from itertools import chain
-from collections import defaultdict
 
 #%%
 def get_methods(data):
@@ -139,7 +137,6 @@ def get_LRP_from_row(name, LRP_db, LRP_db_name, separator="_"):
         return get_LRP_from_row_CellChatDB(name, LRP_db)
     elif LRP_db_name == "STCaseDB":
         return get_LRP_from_row_STCaseDB(name, LRP_db)
-
 #%%
 # radius = avg dist. between all cell/spots and their 6 nearest neighbors
 # non-secretory LRP radius = radius
@@ -369,4 +366,3 @@ def calc_false_pos_all(other_model_results:pd.DataFrame, true_LRPs):
         all_models_false_pos[model] = false_pos
     
     return pd.DataFrame(all_models_false_pos)
-# %%
