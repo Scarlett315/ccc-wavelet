@@ -9,9 +9,6 @@ from ResampleMatrix import getBounds, partitionMatrix, resampleMatrix, plotResam
 
 #%%
 def readWaveletCoeffs(path):
-    '''
-    Given a folder of wavelet coefficients (npz files), reads them into a dictionary
-    '''
     coeffs_dict = {}
     for file in os.listdir(path):
         if file.endswith('.npz'):
@@ -94,20 +91,22 @@ def plotWavelets(coeffs, geneName):
 # inflexible so might need to change later
 def resampleCoeffs(coeffs, S, D, scaleFactor, stack=False):
     upsampledCoeffs = {}
-    L1 = ["L1_B00", "L1_B01", "L1_B10", "L1_B11"]
+    L1 = ["L1_B01", "L1_B10", "L1_B11"]
     L2 = ["L2_B00", "L2_B01", "L2_B10", "L2_B11"]
     for key, value in coeffs.items():
         if key in L1:
             upsampled = upsampleToImage(value, S, D, scaleFactor, wv=2)
         elif key in L2:
             upsampled = upsampleToImage(value, S, D, scaleFactor, wv=4)
+        else:
+            continue
         upsampledCoeffs[key] = upsampled
     if stack:
-        upsampledCoeffs = sorted(upsampledCoeffs.items(), key=lambda item: item[0])
-        upsampledCoeffs = dict(upsampledCoeffs)
-        labels = [key for key in upsampledCoeffs.keys()]
-        upsampledCoeffs = np.stack(upsampledCoeffs, axis=0)
-        return upsampledCoeffs, labels
+        sorted_keys = sorted(upsampledCoeffs.keys())
+        print(sorted_keys)
+        arrays_to_stack = [upsampledCoeffs[key] for key in sorted_keys]
+        upsampledCoeffs = np.stack(arrays_to_stack, axis=0)
+        return upsampledCoeffs
     else:
         return upsampledCoeffs
 #%%

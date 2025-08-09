@@ -11,7 +11,7 @@ def compress_image(input_path, output_path, optimize=True):
 
     Args:
         input_path (str): Path to the original image file.
-        output_path (str): Path to save the compressed image.
+        output_path (str): Path to ssave the compressed image.
         quality (int): JPEG quality setting (0-100). Lower values mean more compression.
         optimize (bool): If True, perform an extra optimization pass.
     """

@@ -43,3 +43,10 @@ def get_agreed_LRPs(other_model_results, min_agreement=3):
             if len(methods_true) >= min_agreement:
                 agreed_LRPs[cell_interaction].append(lrp.Index)
     return agreed_LRPs
+
+#%%
+def remove_models(other_model_results: pd.DataFrame, models_to_remove: list):
+    for model in models_to_remove:
+        other_model_results = other_model_results.loc[:, ~other_model_results.columns.str.contains(model)]
+    return other_model_results
+# %%

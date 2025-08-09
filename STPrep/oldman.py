@@ -58,12 +58,8 @@ print(imgCropped.size)
 # Resampling Expression
 selectedGene = "A2M"
 selectedRow = expression.loc[expression['Unnamed: 0'] == selectedGene]
-testRow = pd.DataFrame(columns=expression.columns) #visualize all barcodes for testing
-testRow.loc[0] = 3
-print(testRow)
-r = resampleEfficient(testRow, coordinates, 32, bounds)
+r = resampleEfficient(selectedRow, coordinates, 32, bounds)
 plotResampledMatrix(r, "A2M", D=32)
-#np.array_equal(r1, r2)
 
 #r1.equals(r2)
 
@@ -82,20 +78,6 @@ resampledCoeffs = resampleCoeffs(coeffs, coordinates, 128, scaleF)
 plotWavelets(resampledCoeffs, "A2M")
 #drawMatrix(u).show()
 #%%
-#plotResampledMatrix(coeffs['L2_B00'], "Wavelet A2M")
-up, map = upsampleToImage(coeffs['L2_B00'], coordinates, 128, scaleF, 4, exportMapping=True)
-#plotResampledMatrix(up, "Upsampled A2M")
-print(up.shape)
-for y, x in zip(np.nonzero(up)[0], np.nonzero(up)[1]):
-    print(f"x: {x}, y: {y}")
-    mask = map[(map["x"] == x) & (map["y"] == y)]
-    print(mask)
-
-print(up[196, 595])
-print(up.shape)
-
-#ap.to_csv(f"test.csv")
-#%%
 print(f"Cropped Image Size: {imgCropped.size}")
 imgCoeff = drawMatrix(resampledCoeffs['L2_B00'])
 print(f"Upsampled Coefficient Shape: {resampledCoeffs['L2_B01'].shape}")
@@ -113,13 +95,9 @@ overlayST(imgCropped, drawMatrix(u))
 #%%
 e = pd.read_csv("/Users/scarlett/Programming/ccc-wavelet/Data/human_breast_cancer/info/expression_filtered.csv", index_col=0)
 c = pd.read_csv("/Users/scarlett/Programming/ccc-wavelet/Data/human_breast_cancer/info/coordinates.csv", index_col=0)
-#a = resampleEfficient(e.loc["BGN"], c, 128, getBounds(c))
-a = pd.read_csv("/Users/scarlett/Programming/ccc-wavelet/Data/human_breast_cancer/process/resampled_128/BGN_resampled_128.csv", index_col=False)
+a = resampleEfficient(e.loc["BGN"], c, 128, getBounds(c))
+
+plotResampledMatrix(a, "BGN")
+#a = pd.read_csv("/Users/scarlett/Programming/ccc-wavelet/Data/human_breast_cancer/process/resampled_128/BGN_resampled_128.csv", index_col=False)
 print(a.head())
-
-a = a.apply(pd.to_numeric, errors='coerce')
-a = a.to_numpy()
-print(a.shape)
-plotResampledMatrix(a, "hi", D=128)
-
-# %%
+#%%

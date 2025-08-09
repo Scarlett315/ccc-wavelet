@@ -121,6 +121,7 @@ def plotResampledMatrix(geneMatrix, geneName, ax=None, title=None, vmin=None, vm
     values = np.asarray(geneMatrix)[nonzero_y, nonzero_x]
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 10))
+        ax.set_label('Gene Expression Level')
         show_plot = True
     else:
         show_plot = False

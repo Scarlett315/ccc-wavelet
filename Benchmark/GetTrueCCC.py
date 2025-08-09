@@ -1,4 +1,5 @@
 #%%
+from numba import none
 import pandas as pd
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
@@ -6,95 +7,80 @@ from scipy.spatial import cKDTree
 from itertools import chain
 from Agreement import *
 #%%
-class lrp:
-    def __init__(self, name, ligand, receptor, secreted):
-        self.name = name
-        self.ligand = ligand
-        self.receptor = receptor
+class LRP:
+    def __init__(self, name:str, ligand:str, receptor:str, secreted:bool):
+        self.name = name # name in LRP database
+        self.ligand = ligand # name in expression/results
+        self.receptor = receptor # name in expression/results
         self.secreted = secreted
+        self.S = None
+        self.R = None
+        self.S_int = set()
+        self.R_int = set()
+        self.overlap_rate = None
+    
+    def add_subsets(self, S, R):
+        self.S = S
+        self.R = R
+
+    def add_interacting(self, S_int, R_int):
+        self.S_int = S_int
+        self.R_int = R_int
+    
+    def add_overlap_rate(self, overlap_rate):
+        self.overlap_rate = overlap_rate
 
     def __str__(self):
-        return f"{self.name} ({self.ligand} + {self.receptor})"
+        return f"{self.name} ({self.ligand} + {self.receptor}); secreted: {self.secreted}"
+
 #%%
-# gets LRP from the row name in the other model results table
-# this doesn't work ignore it
-def get_LRP_from_row_STCaseDB(name, LRP_db, separator="_"):
-    parts = name.split(separator)
-    LRP = [None, None]
-
-    # deal with complexes-- there can be 1-2 pairs
-    # if there's ambiguity hopefully it's their problem :)
-    num_genes = len(parts)
-    if num_genes >=3:
-        parts_left = parts
-
-        possible_ligand_complex = "COMPLEX:" + "_".join([parts[0], parts[1]])
-        possible_receptor_complex = "COMPLEX:" + "_".join([parts[-2], parts[-1]])
-
-        if possible_ligand_complex in LRP_db["ligand"].tolist():
-            LRP[0] = possible_ligand_complex
-            del parts_left[0:1]
-        if possible_receptor_complex in LRP_db["receptor"].tolist():
-            LRP[1] = possible_receptor_complex
-            del parts_left[-1]
-            del parts_left[-1]
-        
-        #fill the other value
-        if LRP[0] == None:
-            LRP[0] = "_".join(parts_left)
-        elif LRP[1] == None:
-            LRP[1] = "_".join(parts_left)
+def get_LRP_from_name(name, LRP_db, complexes, aliases, expression,separator = "_"):
+    def compare_num_parts(row, parts):
+        return len(row.index.str.split(separator)) == len(parts)
+    # LRP (as named in expression/results) is in LRP_db
+    if name in LRP_db.index:
+        r = LRP_db.loc[name]
     else:
-        LRP = parts
-    return LRP
-
-def get_LRP_from_row_CellChatDB(name, LRP_db, aliases, separator = "_"):
-    lrp = [None, None]
-    try:
-        if name in LRP_db.index:
-            lrp[0] = LRP_db.loc[name, "ligand"]
-            lrp[1] = LRP_db.loc[name, "receptor"]
-        else:
-            name_alt = get_alt_name(name, aliases, LRP_db)
-            lrp[0] = name_alt[0]
-            lrp[1] = name_alt[1]
-
-    except KeyError: # complexes can be A_B or B_A  >:(
         parts = name.split(separator)
+
         pattern = "".join([f"(?=.*{part})" for part in parts])
         r = LRP_db.loc[LRP_db.index.str.contains(pattern, regex=True, case=False)]
+        
+        #filter out rows that don't have the exact number of parts
+        r = r[r.apply(compare_num_parts, parts=parts, axis=1)]
 
         # coudn't find or multiple matches
-        if r.empty: 
+        if r.empty or len(r) > 1: 
             raise KeyError("LRP, as named, is not anywhere in LRP database or is ambiguous. Throwing error...")
-        r = r.squeeze()
+        r = r.iloc[0]
 
-        # found all parts but had an extra gene
-        if len(r.name.split("_")) != len(parts):
-            raise KeyError("LRP, as named, is not anywhere in LRP database or is ambiguous. Throwing error...")
+    secreted = r.at["annotation"] == "Secreted Signaling" or r.at["annotation"] == "ECM-Receptor"
+    ligand_in_db = unpack_complex(r.at["ligand"], complexes)
+    receptor_in_db = unpack_complex(r.at["receptor"], complexes)
 
-        lrp[0] = r.at["ligand"]
-        lrp[1] = r.at["receptor"]            
-    return lrp
+    ligand = [get_gene_name_in_exp(gene, aliases, expression) for gene in ligand_in_db]
+    receptor = [get_gene_name_in_exp(gene, aliases, expression) for gene in receptor_in_db]
 
-def get_LRP_from_row(name, LRP_db, LRP_db_name, separator="_"):
-    if LRP_db_name == "CellChatDB":
-        return get_LRP_from_row_CellChatDB(name, LRP_db)
-    elif LRP_db_name == "STCaseDB":
-        return get_LRP_from_row_STCaseDB(name, LRP_db)
-    
-def gene_in_expression(gene, expression):
-    print(expression.index)
-    if gene in expression.index:
-        return True
+    ligand = "_".join(ligand)
+    receptor = "_".join(receptor)
+
+    return LRP(name, ligand, receptor, secreted)
+#%%
+def unpack_complex(name, complexes):
+    if name in complexes.index:
+        # Get all components (all elements in the row, not skipping the first)
+        components = list(complexes.loc[name])
+        
+        # Filter out NaN values
+        components = [comp for comp in components if (comp is not None and not pd.isna(comp))]
+        return components
     else:
-        return False
-    
-def get_genes_in_LRP_db(LRP_db:pd.DataFrame):
-    ligand_genes = list(LRP_db["ligand"])
-    receptor_genes = list(LRP_db["receptor"])
-    combined = list(set(ligand_genes + receptor_genes))
-    return combined
+        # Check if name is a string before splitting
+        if isinstance(name, str):
+            return list(name.split("_"))
+        else:
+            print(f"Warning: name is not a string, returning as single item: {name}")
+            return [str(name)]
 
 #%%
 def find_gene_row(symbol, aliases):
@@ -118,9 +104,8 @@ def find_gene_row(symbol, aliases):
 
 #%%
 # get the name/alias of the gene that is used in the LRP database
-def get_gene_name(name, aliases, LRP_db):
-    genes_in_LRP_db = get_genes_in_LRP_db(LRP_db)
-    if name in genes_in_LRP_db:
+def get_gene_name_in_exp(name, aliases, expression):
+    if name in expression.index:
         return name
     else:
         # Use the new helper function to find the row
@@ -134,79 +119,12 @@ def get_gene_name(name, aliases, LRP_db):
             alias_symbols = gene_row["Alias symbols"].split(", ") if pd.notna(gene_row["Alias symbols"]) else []
             all_symbols = [approved_symbol] + alias_symbols
             
-            common = list(set(all_symbols) & set(genes_in_LRP_db))
-            print(f"Common: {common}")
+            common = list(set(all_symbols) & set(expression.index))
             if len(common) != 1:
-                print(f"Couldn't find {name} in aliases.")
+                print(f"{name} is ambiguous or not in sexpression.")
                 return None
             else:
                 return list(common)[0]
-#%%
-def get_LRP_name(name, aliases, LRP_db):
-    if name in LRP_db.index:
-        return name
-    else:
-        final_name = []
-        genes = name.split("_")
-        for gene in genes:
-            gene_in_lrp = get_gene_name(gene, aliases, LRP_db)
-            final_name.append(gene_in_lrp)
-
-        # make sure that new LRP is in the database
-        new_LRP = "_".join(final_name)
-        if new_LRP in LRP_db.index:
-            return new_LRP
-        else:
-            print(f"Couldn't find {name}.")
-            return None
-#%%
-def standardize_name(event: str, aliases: pd.DataFrame, LRP_db: pd.DataFrame, expression: pd.DataFrame):
-    def split_to_list(s):
-        return s.split(", ") if pd.notna(s) else []
-    aliases = aliases.copy()
-    aliases["Alias symbols"] = aliases["Alias symbols"].apply(split_to_list)
-
-    parts = event.split("_")
-    genes_in_LRP_db = get_genes_in_LRP_db(LRP_db)
-    expression = expression.copy()
-    new_parts = []
-
-    for gene in parts:
-        gene_row = aliases[
-            aliases["Approved symbol"].eq(gene) |
-            aliases["Alias symbols"].fillna("").apply(lambda x: gene in x)
-            ]
-        print(gene)
-
-        if gene_row.empty:
-            print(f"Alias for {gene} not found.")
-            new_parts.append(gene)
-            continue
-
-        #getting all possible names
-        approved = gene_row["Approved symbol"].values[0]
-        aliases_list = gene_row["Alias symbols"]
-        possible_names = set(aliases_list + [approved])
-
-        print(f"{gene} possible names: {possible_names}")
-
-        common_exp = list(possible_names & set(expression.index)) # what the gene is called in expression
-        common_lrp = list(possible_names & set(genes_in_LRP_db)) # what the gene is called in LRP database
-        
-        if len(common_exp) != 1 or len(common_lrp) != 1:
-            print(f"{gene} has multiple or no matches.")
-            continue
-        else:
-            common_exp = str(common_exp[0])
-            common_lrp = str(common_lrp[0])
-        
-        if common_exp != common_lrp:
-            expression.loc[common_exp, "gene"] = common_lrp
-        new_parts.append(common_lrp)
-
-    new_name = "_".join(new_parts)
-    return expression, new_name
-    
 #%%
 # radius = avg dist. between all cell/spots and their 6 nearest neighbors
 # non-secretory LRP radius = radius
@@ -225,9 +143,9 @@ def calc_diffusion_radius(coords):
 
 #%%
 # get spots/barcodes expressing ligands and receptors
-def subset_spots(expression, LRP, threshold=0.1):
-    ligand = LRP[0].split("_")
-    receptor = LRP[1].split("_")
+def subset_spots(expression, lrp, threshold=0.1):
+    ligand = lrp.ligand.split("_")
+    receptor = lrp.receptor.split("_")
 
     ligand_expressed = expression.loc[ligand]
     receptor_expressed = expression.loc[receptor]
@@ -238,17 +156,19 @@ def subset_spots(expression, LRP, threshold=0.1):
    
     S = ligand_expressed.loc[:,ligand_spots]
     R = receptor_expressed.loc[:,receptor_spots]
-    S = pd.Series({"barcodes": list(S.columns)}, name=LRP[0])
-    R = pd.Series({"barcodes": list(R.columns)}, name=LRP[1])
-    return S, R
+    S = pd.Series({"barcodes": list(S.columns)}, name=lrp.ligand)
+    R = pd.Series({"barcodes": list(R.columns)}, name=lrp.receptor)
+    lrp.add_subsets(S, R)
+    return lrp
 #%%
 # determine which spots/barcodes are interacting based on spatial distance
 # a lot of this is kind of unnecessary but whatever
-def get_interacting(S, R, coords, radius):
+def get_interacting(lrp, coords, radius):
     '''
     S: subset of cell/spots expressing ligands
     R: subset of cell/spots expressing receptors
     '''
+    S, R = lrp.S, lrp.R
     S_interacting = set()
     R_interacting = set()
 
@@ -265,47 +185,32 @@ def get_interacting(S, R, coords, radius):
                 #print(f"Barcode {barcode} in S interacting with {len(in_radius)} spots in R")
         else:
             print(f"Barcode {barcode} not found in coords")
-    return list(S_interacting), list(R_interacting)
+    lrp.add_interacting(list(S_interacting), list(R_interacting))
+    return lrp
 #%%
-def calc_overlap_rate(LRP, coords, radius_unsecreted, sub:tuple, LRP_db=None):
-    if sub is None:
-        return None
-    else:
-        S, R = sub
-
+def calc_overlap_rate(lrp, coords, radius_unsecreted):
+    S, R = lrp.S, lrp.R
     sum_SR = len(S["barcodes"]) + len(R["barcodes"])
 
     # secreted versus non-secreted
-    if LRP_db is not None:
-        ligand_type = LRP_db.at[LRP[0] + "_" + LRP[1], "annotation"]
-        if ligand_type == "Secreted Signaling" or ligand_type == "ECM-Receptor": # secreted = non-secreted * 2
-            radius = radius_unsecreted * 2
-        else:
-            radius = radius_unsecreted
+    if lrp.secreted:
+        radius = radius_unsecreted * 2
+    else:
+        radius = radius_unsecreted
 
-    S_interacting, R_interacting = get_interacting(S, R, coords, radius) 
-
-    sum_SR_interacting = len(S_interacting) + len(R_interacting)
+    lrp = get_interacting(lrp, coords, radius) 
+    sum_SR_interacting = len(lrp.S_int) + len(lrp.R_int)
     
     return sum_SR_interacting / sum_SR 
 #%%
-def get_accurate_CCC_events(agreed_LRPs, coords, expression, LRP_db, aliases:pd.DataFrame=None, LRP_db_name="CellChatDB", overlap_threshold=0.95):
+def get_accurate_CCC_events(agreed_LRPs, coords, expression, LRP_db, aliases, complexes, overlap_threshold=0.95):
     def is_reliable(event, radius):
-        LRP = get_LRP_from_row(event, LRP_db, LRP_db_name)
-        if LRP == None:
-            reliable = False
-            overlap_rate = -1
-        sub = subset_spots(expression, LRP)
-        overlap_rate = calc_overlap_rate(LRP, coords, radius, sub, LRP_db=LRP_db)
-        reliable = (overlap_rate >= overlap_threshold)
-        return reliable, overlap_rate
+        lrp = get_LRP_from_name(event, LRP_db, complexes, aliases, expression)
+        lrp = subset_spots(expression, lrp)
+        lrp.overlap_rate = calc_overlap_rate(lrp, coords, radius)
+        lrp.reliable = lrp.overlap_rate >= overlap_threshold
+        return lrp
     
-    def try_alt_names(event):
-        if aliases is None:
-            return None
-        parts = event.split("_")
-        missing = [part for part in parts if (not name_in_LRP_db(part, LRP_db))]
-        
     agreed_LRPs_unorganized = list(set(chain.from_iterable(list(agreed_LRPs.values())))) # just all LRPs
     true_LRPs = {}
     not_found = []
@@ -314,15 +219,14 @@ def get_accurate_CCC_events(agreed_LRPs, coords, expression, LRP_db, aliases:pd.
     radius_unsec = calc_diffusion_radius(coords)
     for i, event in enumerate(agreed_LRPs_unorganized, start=1): # each CCC event
         try:
-            reliable, overlap_rate = is_reliable(event, radius_unsec)
+            lrp = is_reliable(event, radius_unsec)
         except KeyError:
-            print(f"Couldn't find CCC event {event}; trying alternate names...")
-            print(f"Couldn't find CCC event {event} somewhere in the process. Check for alternate naming...")
+            print(f"Couldn't find CCC event {event} somewhere in the process.")
             not_found.append(event)
             continue
 
-        print(f"{i}. {event}: {reliable}, overlap = {overlap_rate}")
-        if reliable:
+        print(f"{i}. {event}: {lrp.reliable}, overlap = {lrp.overlap_rate}")
+        if lrp.reliable:
             cell_ints = [key for key, val in agreed_LRPs.items() if (event in val)] # all cell-type interactions this CCC evt is part of 
             for key in cell_ints:
                 if key in true_LRPs:
@@ -335,3 +239,4 @@ def get_accurate_CCC_events(agreed_LRPs, coords, expression, LRP_db, aliases:pd.
 
     print(f"{len(list(chain.from_iterable(list(true_LRPs.values()))))} true LRPs out of {len(agreed_LRPs_unorganized)} total")
     return true_LRPs
+# %%

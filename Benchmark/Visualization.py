@@ -4,8 +4,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 import matplotlib.patches as mpatches
+from GetTrueCCC import *
 #%%
-def visualize_overlap(S, R, coords, radius, secreted, plot_interacting = False, down_factor = 1):
+def visualize_overlap(lrp, coords, radius, plot_interacting = False, down_factor = 1):
+    S, R = lrp.S, lrp.R
     ligand_coords = coords.loc[S.barcodes] # ligand coordinates ("center")
     receptor_coords = coords.loc[R.barcodes]
 
@@ -17,11 +19,11 @@ def visualize_overlap(S, R, coords, radius, secreted, plot_interacting = False, 
     ax.invert_yaxis()
     plt.title(f"{S.name} --> {R.name}, scaled: 1/{down_factor}")
 
-    if secreted:
+    if lrp.secreted:
         radius *= 2
     if plot_interacting:
-        S_int, R_int = get_interacting(S, R, coords, radius)
-    
+        S_int, R_int = lrp.S_int, lrp.R_int
+
     for spot in ligand_coords.itertuples():
         color = "#FF9B00"
         if (plot_interacting) and (spot.Index in S_int):
@@ -49,3 +51,6 @@ def visualize_overlap(S, R, coords, radius, secreted, plot_interacting = False, 
 
     plt.legend(handles=handles, loc='lower left', title="Key", bbox_to_anchor = (0, -0.5))
     plt.show()
+
+# %%
+
