@@ -45,6 +45,14 @@ def get_agreed_LRPs(other_model_results, min_agreement=3):
     return agreed_LRPs
 
 #%%
+def get_agreed_LRPs_eff(other_model_results):
+    # create multi-indexed df
+    methods = [col.split("_")[0] for col in other_model_results.columns]
+    results_3d = pd.DataFrame(index=other_model_results.index, columns=methods)
+
+
+
+#%%
 def remove_models(other_model_results: pd.DataFrame, models_to_remove: list):
     for model in models_to_remove:
         other_model_results = other_model_results.loc[:, ~other_model_results.columns.str.contains(model)]

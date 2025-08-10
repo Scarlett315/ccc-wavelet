@@ -39,3 +39,31 @@ def calc_false_pos_all(other_model_results:pd.DataFrame, true_LRPs):
         all_models_false_pos[model] = false_pos
     
     return pd.DataFrame(all_models_false_pos)
+
+
+
+
+#%%
+e = pd.read_csv("../GSE208253/S1/info/expression_matrix.csv", index_col=0)
+c = pd.read_csv("../GSE208253/S1/info/coordinates.csv", index_col=0)
+#%%
+lrp = get_LRP_from_name("CXCL12_CXCR4", LRP_database, complexes, aliases, e)
+print(lrp)
+lrp = subset_spots(e, lrp)
+radius = calc_diffusion_radius(c)
+#%%
+lrp = get_interacting(lrp, c, radius)
+#%%
+lrp.overlap_rate = calc_overlap_rate(lrp, c, radius)
+visualize_overlap(lrp, c, radius, plot_interacting=True)
+print(lrp.overlap_rate)
+
+#%%
+unorg = list(set(chain.from_iterable(list(agreed_LRPs.values())))) # just all LRPs
+print(unorg[252])
+# %%
+print(unpack_complex("ACVR1_ACVR2A", complexes))
+
+# %%
+LRP_database.shape
+# %%

@@ -105,7 +105,7 @@ def resampleCoeffs(coeffs, S, D, scaleFactor, stack=False):
         sorted_keys = sorted(upsampledCoeffs.keys())
         print(sorted_keys)
         arrays_to_stack = [upsampledCoeffs[key] for key in sorted_keys]
-        upsampledCoeffs = np.stack(arrays_to_stack, axis=0)
+        upsampledCoeffs = np.stack(arrays_to_stack, axis=2)
         return upsampledCoeffs
     else:
         return upsampledCoeffs

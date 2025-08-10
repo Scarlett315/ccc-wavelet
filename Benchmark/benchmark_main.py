@@ -1,5 +1,4 @@
 #%%
-from tkinter import E
 import pandas as pd
 import numpy as np
 import json
@@ -10,58 +9,54 @@ from Accuracy import *
 import matplotlib.pyplot as plt
 from Visualization import *
 #%%
+LRP_database = pd.read_csv("CellChatDB/interaction_input_CellChatDB.csv", index_col=0)
+aliases = pd.read_csv("Aliases_HGNC.tsv", sep="\t", index_col=0)
+complexes = pd.read_csv("CellChatDB/complex_input_CellChatDB.csv", index_col=0)
+
+#%%
 # reading files
 other_model_results = pd.read_csv("Human_BRCA/fig_1b.csv", index_col=0)
 coords = pd.read_csv("../Data/human_breast_cancer/info/coordinates.csv", index_col=0)
 expression = pd.read_csv("../Data/human_breast_cancer/info/expression_unfiltered.csv", index_col=0)
-LRP_database = pd.read_csv("CellChatDB/interaction_input_CellChatDB.csv", index_col=0)
-aliases = pd.read_csv("Aliases_HGNC.tsv", sep="\t", index_col=0)
-complexes = pd.read_csv("CellChatDB/complex_input_CellChatDB.csv", index_col=0)
+
 #%%
 with open("Human_BRCA/reliable_CCC.json", "r") as f:
     accurate_CCC = json.load(f)
 with open("Human_BRCA/agreed_LRPs.json", "r") as f:
     agreed_LRPs = json.load(f)
-# %%
-other_model_results.head()
+
 # %%
 other_model_results = remove_models(other_model_results, ["stLearn", "SpaTalk", "Giotto", "NichNet"])
-other_model_results_agree = add_agreed_ints(other_model_results, agreed_LRPs)
+agreed_LRPs_rm = get_agreed_LRPs(other_model_results)
+#%%
+with open("Human_BRCA/agreed_LRPs_rm.json", "w") as f:
+    json.dump(agreed_LRPs_rm, f)
+#reliable_CCC = get_accurate_CCC_events(agreed_LRPs_rm, coords, expression, LRP_database, aliases, complexes)
+#%%
+other_model_results_agree = add_agreed_ints(other_model_results, agreed_LRPs_rm)
 other_model_results_agree.head(50)
 #%%
 false_pos = calc_false_pos_all(other_model_results_agree, accurate_CCC)
 false_pos = false_pos.T
-row_averages = false_pos.mean(axis=1)
-sorted_false_pos = false_pos.loc[row_averages.sort_values().index]
+
+print(false_pos.head())
+
+# Sort by row averages (models) and column averages (interactions)
+# Calculate row averages (average false positive rate per model)
+row_means = false_pos.mean(axis=1)
+# Calculate column averages (average false positive rate per interaction)
+col_means = false_pos.mean(axis=0)
+    
+false_pos_sorted = false_pos.loc[row_means.sort_values(ascending=True).index]
+#false_pos_sorted = false_pos_sorted[col_means.sort_values(ascending=True).index]
+
 #%%
 fig, ax = plt.subplots(figsize=(10, 3)) 
-sns.heatmap(sorted_false_pos, ax=ax, vmin=0, vmax=1)
-# %%
-print(get_totals_per_interaction(other_model_results))
+sns.heatmap(false_pos_sorted, ax=ax, vmin=0, vmax=1, cmap="seismic_r")
 
 # %%
 fig, ax = plt.subplots()
 plt.xticks(rotation=90)
-sorted_false_pos.T.boxplot(rot=90)
-#%%
-e = pd.read_csv("../GSE208253/S1/info/expression_matrix.csv", index_col=0)
-c = pd.read_csv("../GSE208253/S1/info/coordinates.csv", index_col=0)
+false_pos_sorted.T.boxplot(rot=90)
 
-lrp = get_LRP_from_name("CXCL12_CXCR4", LRP_database, complexes, aliases, e)
-print(lrp)
-lrp = subset_spots(e, lrp)
-radius = calc_diffusion_radius(c)
-lrp = get_interacting(lrp, c, radius)
-visualize_overlap(lrp, c, radius, plot_interacting=True)
-overlap = calc_overlap_rate(lrp, c, radius)
-print(overlap)
-
-#%%
-unorg = list(set(chain.from_iterable(list(agreed_LRPs.values())))) # just all LRPs
-print(unorg[252])
-# %%
-print(unpack_complex("ACVR1_ACVR2A", complexes))
-
-# %%
-LRP_database.shape
 # %%

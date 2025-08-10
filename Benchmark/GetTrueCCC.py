@@ -1,5 +1,4 @@
 #%%
-from numba import none
 import pandas as pd
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
@@ -17,6 +16,7 @@ class LRP:
         self.R = None
         self.S_int = set()
         self.R_int = set()
+        self.autocrine = set()
         self.overlap_rate = None
     
     def add_subsets(self, S, R):
@@ -26,6 +26,9 @@ class LRP:
     def add_interacting(self, S_int, R_int):
         self.S_int = S_int
         self.R_int = R_int
+    
+    def add_autocrine(self, autocrine):
+        self.autocrine = autocrine
     
     def add_overlap_rate(self, overlap_rate):
         self.overlap_rate = overlap_rate
@@ -156,13 +159,15 @@ def subset_spots(expression, lrp, threshold=0.1):
    
     S = ligand_expressed.loc[:,ligand_spots]
     R = receptor_expressed.loc[:,receptor_spots]
+    autocrine = set(S.columns).intersection(set(R.columns))
+
     S = pd.Series({"barcodes": list(S.columns)}, name=lrp.ligand)
     R = pd.Series({"barcodes": list(R.columns)}, name=lrp.receptor)
+    lrp.add_autocrine(list(autocrine))
     lrp.add_subsets(S, R)
     return lrp
 #%%
 # determine which spots/barcodes are interacting based on spatial distance
-# a lot of this is kind of unnecessary but whatever
 def get_interacting(lrp, coords, radius):
     '''
     S: subset of cell/spots expressing ligands
@@ -172,33 +177,35 @@ def get_interacting(lrp, coords, radius):
     S_interacting = set()
     R_interacting = set()
 
+    # Apply radius doubling for secreted ligands
+    if lrp.secreted:
+        radius = radius * 2
+
+    coords = coords.copy()
     ligand_coords = coords.loc[S["barcodes"], ["x", "y"]] # ligand coordinates ("center")
-    tree = cKDTree(coords.loc[R["barcodes"], ["x", "y"]]) # receptor coordinates
+    receptor_coords = coords.loc[R["barcodes"], ["x", "y"]] # receptor coordinates
+    tree = cKDTree(receptor_coords)
+    
     for barcode, row in ligand_coords.iterrows():
         if barcode in coords.index:
             indices = tree.query_ball_point((row.x, row.y), radius, p=2) #p=2 -> Euclidean
             in_radius = np.array(R["barcodes"])[indices]
-            
+
             if len(in_radius) > 0:
                 S_interacting.add(barcode)
                 R_interacting.update(in_radius)
-                #print(f"Barcode {barcode} in S interacting with {len(in_radius)} spots in R")
         else:
             print(f"Barcode {barcode} not found in coords")
+    
     lrp.add_interacting(list(S_interacting), list(R_interacting))
+    
     return lrp
 #%%
 def calc_overlap_rate(lrp, coords, radius_unsecreted):
     S, R = lrp.S, lrp.R
     sum_SR = len(S["barcodes"]) + len(R["barcodes"])
 
-    # secreted versus non-secreted
-    if lrp.secreted:
-        radius = radius_unsecreted * 2
-    else:
-        radius = radius_unsecreted
-
-    lrp = get_interacting(lrp, coords, radius) 
+    lrp = get_interacting(lrp, coords, radius_unsecreted) 
     sum_SR_interacting = len(lrp.S_int) + len(lrp.R_int)
     
     return sum_SR_interacting / sum_SR 

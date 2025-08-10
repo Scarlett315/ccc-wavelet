@@ -7,11 +7,10 @@ library(hdf5r)
 library(rhdf5)
 library(data.table)
 source("STPrep.R")
-
-h5ls("GSE208253/rawData/S4/filtered_feature_bc_matrix.h5")
+library(aricode)
 
 # getting data and putting it into Seurat
-data.dir <- "../GSE208253/S12/raw_data"
+data.dir <- "../GSE208253/S1/raw_data"
 seu <- Load10X_Spatial(
   data.dir,
   filename = "filtered_feature_bc_matrix.h5",
@@ -23,11 +22,46 @@ seu <- Load10X_Spatial(
   #image = NULL,
 )
 img <- Read10X_Image(
-  image.dir = "../GSE208253/S12/raw_data/spatial",
+  image.dir = "../GSE208253/S1/raw_data/spatial",
   filter.matrix = TRUE
 )
 
-# 
+load("../GSE208253/SeuratObjects/sample_1.Robj")
+anno <- sample_1@meta.data
+colnames(anno)
+anno$sample_id.x=NULL
+anno$cluster_annotations=NULL
+
+cl.anno <- sample_1@meta.data
+cl.anno$sample_id.x=NULL
+cl.anno$pathologist_anno.x=NULL
+
+
+seu <- AddMetaData(object = seu,
+                          metadata = anno,
+                          col.name = "pathologist_annotation")
+
+seu <- AddMetaData(object = seu,
+                   metadata = cl.anno,
+                   col.name = "cluster_annotation")
+
+# QC
+seu_raw[["percent.mt"]] <- PercentageFeatureSet(seu_raw, pattern = "^MT-")
+VlnPlot(seu_raw, features = "percent.mt", pt.size = 0.1)
+
+plot1 <- VlnPlot(seu_raw, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+plot2 <- SpatialFeaturePlot(seu_raw, features = "nCount_Spatial", image.scale = "hires") + theme(legend.position = "right")
+wrap_plots(plot1, plot2)
+
+VlnPlot(seu, features = c("nFeature_Spatial", "nCount_Spatial"), pt.size = 0.1)
+
+seu <- subset(seu_raw, subset = 
+                nFeature_Spatial > 200 &
+                nFeature_Spatial < 9000 &
+                percent.mt < 6
+)
+
+#
 DefaultAssay(seu) <- "Spatial"
 seu <- NormalizeData(object = seu, normalization.method = "LogNormalize", scale.factor = 10000)
 seu <- ScaleData(seu , verbose = FALSE)
@@ -37,8 +71,16 @@ seu <- FindNeighbors(seu, reduction = "pca", dims = 1:20)
 seu <- RunUMAP(seu, reduction = "pca", dims = 1:20)
 seu <- FindClusters(seu, verbose = TRUE)
 
-DimPlot(seu)
-#SpatialFeaturePlot(seu, features = c("SDF4"))
+#ARI
+clusters <- seu$seurat_clusters
+annotations <- seu$pathologist_annotation
+valid_idx <- !is.na(clusters) & !is.na(annotations)
+
+ari_score <- ARI(clusters[valid_idx], annotations[valid_idx])
+print(ari_score)
+
+SpatialDimPlot(seu,group.by = "cluster_annotation", image.scale = "hires")
+DimPlot(seu,group.by = "pathologist_annotation")
 
 exp <- getExpression(seu)
 
@@ -57,9 +99,4 @@ fwrite(marker_expr_df, "GSE208253/info/S4/expression_filtered.csv", row.names = 
 #spatial
 c <- getSpatial(seu)
 fwrite(c, "../GSE208253/S12/info/coordinates.csv", row.names = TRUE)
-
-
-#pathologist annotations from Seurat objects
-obj <- load("../GSE208253/SeuratObjects/sample_6.Robj")
-fwrite(sample_6@meta.data, "../GSE208253/S6/info/pathologist_annotations.csv", row.names = TRUE)
 
